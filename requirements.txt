@@ -1,0 +1,14 @@
+# Fishing-RL simulation — runtime dependencies (Python 3.11+ recommended).
+numpy>=1.24
+pygame>=2.5            # live 2D renderer
+
+# Video recording (scripts.play_heuristic --record, scripts.record_cell).
+# imageio-ffmpeg ships the ffmpeg binary imageio uses to write mp4s.
+imageio>=2.31
+imageio-ffmpeg>=0.4
+
+# TOML config parsing:
+#   - Python 3.11+ uses the stdlib `tomllib` (no install needed).
+#   - On older Pythons this is the fallback (there is also a built-in mini-parser,
+#     so it is optional). Uncomment if you must run on < 3.11.
+# tomli>=2.0

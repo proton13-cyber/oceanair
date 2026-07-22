@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environment
+.venv/
+venv/
+
+# Simulation outputs (videos, reports, sweep data)
+runs/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local Claude settings (personal, machine-specific)
+.claude/settings.local.json
+
+# Stray logs
+*.log

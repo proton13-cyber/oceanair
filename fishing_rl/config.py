@@ -1,0 +1,119 @@
+"""Central configuration for the fishing simulation.
+
+Everything tunable lives here so a study has a single surface to edit: world size,
+vessel dynamics, fuel economy, harpoon/dock, fish spawning, curriculum spawn band.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+
+@dataclass
+class Dynamics:
+    max_speed: float          # nmi / step at full throttle
+    max_turn_rate: float      # radians / step at full turn (hard cap)
+    tank: float               # max fuel (lb)
+    idle_burn: float          # lb / step regardless of speed
+    move_burn: float          # lb / step per unit speed
+    # Turn agility: angular rate is capped at turn_agility / speed, so a FAST craft
+    # arcs wide while a SLOW one still turns tight (matches real aircraft: radius grows
+    # with v^2). NOTE: the real F-15 radius is a pivot-in-place at this 1000-nmi scale;
+    # this is STYLIZED for readable, graceful cruise turns.
+    turn_agility: float = 1e9  # default huge = no limit (pivot freely)
+
+
+@dataclass
+class Curriculum:
+    """Scales difficulty. Interpolate stage in [0,1] during training."""
+    enabled: bool = True
+    # fish spawn band as fraction of world width (world = 1000 nmi), easy -> hard.
+    # Port is on the left shore (x=100 nmi). Grounds are bounded by the boats'
+    # 1000 nmi range: at 350-550 nmi out a boat arrives with working margin, then
+    # depends on forward barges (it can only refuel from barges, never port).
+    easy_min_x: float = 0.30
+    easy_max_x: float = 0.50
+    hard_min_x: float = 0.20   # grounds 200-400 nmi out: far enough to need barge fuel
+    hard_max_x: float = 0.40   # support, close enough that dock reload runs stay affordable
+    # fuel generosity multiplier from easy->hard:
+    easy_tank_mult: float = 1.5
+    hard_tank_mult: float = 1.0
+
+
+@dataclass
+class Config:
+    # ---- fleet ----
+    n_boats: int = 4
+    n_barges: int = 8
+
+    # ---- world ----
+    world_width: float = 1000.0       # nmi, east-west (x)
+    world_height: float = 1000.0      # nmi, north-south (y) — set != width for a non-square ocean
+    port_frac: tuple = (0.10, 0.50)   # port position as fraction of world (x, y)
+    dt: float = 1.0
+    max_steps: int = 3600      # ~60 hr voyage: long enough for several refuel / reload cycles
+    min_speed_frac: float = 0.10  # boats & barges can NEVER sit still: always move >= this fraction of max_speed (when fueled)
+    accel_frac: float = 0.15   # momentum: speed can change by at most this fraction of max_speed per step
+    loiter_radius: float = 180.0  # nmi — when idle (no fish), boats patrol a ring this wide instead of piling on one point
+    loiter_spin: float = 0.015    # rad/step the patrol ring rotates, so idle boats sweep wide arcs instead of spinning in place
+    harpoon_range: float = 40.0   # nmi — boats harpoon fish from ~AIM-120 mid range (vs the close-net catch_radius)...
+    harpoon_cooldown: int = 8     # ...must reload this many steps between shots...
+    harpoon_ammo: int = 8         # ...and carry only this many harpoons before returning to the dock to restock
+    dock_service_steps: int = 45       # min a boat sits on the deck to rearm + refuel (1 step = 1 min)
+    barge_dock_service_steps: int = 25  # min a tanker sits at the dock to fully refuel
+    refuel_full_frac: float = 0.90  # a refueling boat floats alongside the barge until this full (dwell, not instant)
+
+    # ---- entity dynamics ----
+    # Units: distance = nautical miles, 1 step ~ 1 minute, fuel = pounds.
+    # Boat = F-14 analog (fast consumer): 20,000 lb tank = 1000 nmi range at cruise.
+    boat: Dynamics = field(default_factory=lambda: Dynamics(
+        max_speed=8.33, max_turn_rate=0.35, tank=20000.0,  # F-15C: 500 kts; 20k lb -> ~1250 nmi range
+        idle_burn=67.0, move_burn=7.9,                     # loiter ~4000 lb/hr, cruise ~8000 lb/hr
+        turn_agility=1.0))                                 # wide arc at cruise, tight when slow
+    # Barge = KC-135 tanker analog (jet: fast, big fuel load, offloads to boats).
+    barge: Dynamics = field(default_factory=lambda: Dynamics(
+        max_speed=7.67, max_turn_rate=0.10, tank=200000.0,  # 460 kts; ~200k lb fuel
+        idle_burn=120.0, move_burn=8.2,                    # cruise ~11000 lb/hr (183 lb/step)
+        turn_agility=0.6))                                 # big jet -> wide turns
+
+    # ---- fish ----
+    # Fish travel in schools. Each episode has a random number of schools (< 10), and
+    # they swim (slower than boats). Sparse on purpose so boats must range for them.
+    max_fish: int = 9                 # total fish cap across all schools (sparse)
+    max_schools: int = 6              # episode spawns a random 2..max_schools schools
+    school_size: int = 3              # fish per school
+    school_spawn_prob: float = 0.05   # per-step chance to add a fresh school (under cap)
+    fish_speed_frac: float = 0.40     # fish swim at 40% of boat max speed
+    fish_wander: float = 0.20         # random heading change per step (radians)
+    school_spread: float = 25.0       # nmi jitter of fish around their school centre
+    fish_barge_clearance_mult: float = 2.0  # schools spawn >= this * scare_radius from any barge
+    # fish spawn randomly within this X (curriculum band) / Y band
+    fish_y_min: float = 0.35
+    fish_y_max: float = 0.65
+
+    # ---- interaction radii ----
+    catch_radius: float = 15.0
+    scare_radius: float = 60.0
+    barge_avoid_radius: float = 70.0  # barges must keep clear of fish by this much; they evade if a fish gets closer
+    refuel_radius: float = 25.0       # boat<->barge fuel transfer range
+    port_radius: float = 40.0         # barge<->port refill range
+    transfer_rate: float = 2000.0     # lb / step, barge -> boat (aerial-refuel offload rate)
+    port_refill_rate: float = 4000.0  # lb / step, port -> barge (fast dockside pumping)
+
+    # ---- curriculum ----
+    curriculum: Curriculum = field(default_factory=Curriculum)
+
+    seed: int = 0
+
+    # ---- derived ----
+    @property
+    def port_pos(self):
+        return (self.port_frac[0] * self.world_width,
+                self.port_frac[1] * self.world_height)
+
+    @property
+    def agent_names(self):
+        return ([f"boat_{i}" for i in range(self.n_boats)] +
+                [f"barge_{i}" for i in range(self.n_barges)])
+
+    def role_of(self, name: str) -> str:
+        return "boat" if name.startswith("boat") else "barge"

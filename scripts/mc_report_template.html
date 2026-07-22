@@ -1,0 +1,244 @@
+<title>Fleet Stability — Monte Carlo</title>
+<style>
+  :root{
+    --bg:#e9eef2; --panel:#fff; --panel-2:#f4f7f9; --ink:#16242f; --muted:#5a7082;
+    --faint:#8298a8; --line:#d0dae1; --grid:#dbe3e9;
+    --accent:#0c8f80; --surv:#2fa985; --lost:#e2664f;
+    --c1:#2f9e8f; --c2:#d98a3f; --c3:#6b6fc7;
+    --shadow:0 1px 2px rgba(20,40,55,.06),0 8px 24px rgba(20,40,55,.06); color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#091320; --panel:#0e1c29; --panel-2:#0b1826; --ink:#cfdae3; --muted:#7d94a6;
+    --faint:#5f7889; --line:#1c3143; --grid:#16283a;
+    --accent:#45e0d0; --surv:#1d9789; --lost:#d15b45;
+    --c1:#2ba192; --c2:#c07d38; --c3:#7377cc;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35); color-scheme:dark;}}
+  :root[data-theme="light"]{
+    --bg:#e9eef2; --panel:#fff; --panel-2:#f4f7f9; --ink:#16242f; --muted:#5a7082;
+    --faint:#8298a8; --line:#d0dae1; --grid:#dbe3e9;
+    --accent:#0c8f80; --surv:#2fa985; --lost:#e2664f;
+    --c1:#2f9e8f; --c2:#d98a3f; --c3:#6b6fc7;
+    --shadow:0 1px 2px rgba(20,40,55,.06),0 8px 24px rgba(20,40,55,.06); color-scheme:light;}
+  :root[data-theme="dark"]{
+    --bg:#091320; --panel:#0e1c29; --panel-2:#0b1826; --ink:#cfdae3; --muted:#7d94a6;
+    --faint:#5f7889; --line:#1c3143; --grid:#16283a;
+    --accent:#45e0d0; --surv:#1d9789; --lost:#d15b45;
+    --c1:#2ba192; --c2:#c07d38; --c3:#7377cc;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35); color-scheme:dark;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:940px;margin:0 auto;padding:44px 24px 64px;}
+  header{border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:28px;}
+  .eyebrow{font-family:ui-monospace,monospace;font-size:12px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--accent);margin:0 0 12px;}
+  h1{font-size:clamp(27px,4.4vw,42px);line-height:1.06;margin:0 0 13px;letter-spacing:-.01em;
+    text-wrap:balance;font-weight:650;}
+  .lede{font-size:16.5px;color:var(--muted);max-width:66ch;margin:0;}
+  .lede b{color:var(--ink);font-weight:600;}
+  .callout{display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;background:var(--panel);
+    border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:12px;
+    padding:18px 20px;margin:26px 0 34px;box-shadow:var(--shadow);}
+  .callout .big{font-family:ui-monospace,monospace;font-size:22px;font-weight:650;
+    color:var(--accent);letter-spacing:-.01em;}
+  .callout .txt{font-size:14.5px;color:var(--muted);flex:1;min-width:240px;}
+  .callout .txt b{color:var(--ink);font-weight:600;}
+  section{margin-bottom:36px;}
+  h2{font-size:13px;font-family:ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 4px;}
+  .sub{font-size:14px;color:var(--muted);margin:0 0 18px;max-width:70ch;}
+  .sub b{color:var(--ink);font-weight:600;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:22px 24px 18px;box-shadow:var(--shadow);}
+  svg{display:block;width:100%;height:auto;overflow:visible;}
+  text{font-family:ui-monospace,monospace;fill:var(--muted);}
+  .legend{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-top:14px;padding-top:14px;
+    border-top:1px solid var(--line);font-size:13px;color:var(--muted);}
+  .legend .k{display:flex;align-items:center;gap:8px;}
+  .legend svg{width:16px;height:16px;flex:none;}
+  table{width:100%;border-collapse:collapse;margin-top:6px;}
+  th,td{padding:9px 10px;font-size:13.5px;border-bottom:1px solid var(--line);}
+  th{text-align:right;font-family:ui-monospace,monospace;font-size:10.5px;letter-spacing:.09em;
+    text-transform:uppercase;color:var(--faint);font-weight:500;}
+  th:first-child,td:first-child{text-align:left;}
+  td{font-family:ui-monospace,monospace;font-variant-numeric:tabular-nums;text-align:right;}
+  tr.best td{color:var(--accent);font-weight:650;}
+  .takeaways{list-style:none;padding:0;margin:0;}
+  .takeaways li{position:relative;padding-left:20px;margin-bottom:12px;font-size:14.5px;}
+  .takeaways li::before{content:"▸";position:absolute;left:0;color:var(--accent);}
+  .takeaways b{font-weight:650;}
+  footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);font-size:12.5px;color:var(--faint);}
+  footer b{color:var(--muted);font-weight:600;}
+  #tip{position:fixed;pointer-events:none;opacity:0;transform:translate(-50%,-120%);background:var(--ink);
+    color:var(--bg);font-family:ui-monospace,monospace;font-size:11.5px;padding:5px 8px;border-radius:6px;
+    white-space:nowrap;transition:opacity .08s;z-index:9;}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow" id="eyebrow"></p>
+    <h1 id="title"></h1>
+    <p class="lede" id="lede"></p>
+  </header>
+  <div class="callout"><span class="big" id="c-head"></span><span class="txt" id="c-sub"></span></div>
+  <section>
+    <h2>Survival rate</h2>
+    <p class="sub">Share of voyages that finished with <b>no boat lost</b> — the stability that matters most.</p>
+    <div class="card"><svg id="bars" viewBox="0 0 720 200" role="img" aria-label="Survival rate by fleet"></svg></div>
+  </section>
+  <section>
+    <h2>Catch distribution</h2>
+    <p class="sub">Each dot is one voyage's catch. A <b>tight, high cluster</b> is dependable; a
+      <b>long low tail</b> means occasional bad voyages. Filled = survived, hollow ring = a boat lost.</p>
+    <div class="card">
+      <svg id="strip" viewBox="0 0 720 320" role="img" aria-label="Catch distribution by fleet"></svg>
+      <div class="legend">
+        <span class="k"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill="var(--surv)"/></svg> boats survived</span>
+        <span class="k"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill="none" stroke="var(--lost)" stroke-width="2"/></svg> a boat was lost</span>
+        <span class="k"><svg viewBox="0 0 16 16"><line x1="8" y1="2" x2="8" y2="14" stroke="var(--ink)" stroke-width="2"/></svg> median</span>
+      </div>
+    </div>
+  </section>
+  <section id="cyc-section">
+    <h2>Refuel cycling</h2>
+    <p class="sub">Average logistics events per voyage — how hard the fleet worked. More, smaller
+      tankers cycle to the dock more often, which keeps the grounds covered.</p>
+    <div class="card">
+      <svg id="cyc" viewBox="0 0 720 260" role="img" aria-label="Refuel events by fleet"></svg>
+      <div class="legend">
+        <span class="k"><svg viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="8" rx="2" fill="var(--c1)"/></svg> at-sea refuels</span>
+        <span class="k"><svg viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="8" rx="2" fill="var(--c2)"/></svg> tanker dock refuels</span>
+        <span class="k"><svg viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="8" rx="2" fill="var(--c3)"/></svg> boat dock reloads</span>
+      </div>
+    </div>
+  </section>
+  <section>
+    <h2>The numbers</h2>
+    <div class="card" style="padding:8px 14px 4px;overflow-x:auto;">
+      <table id="tbl"><thead><tr>
+        <th>Fleet</th><th>Survival</th><th>Catches (mean±sd)</th><th>CV</th>
+        <th>Time-to-loss med/worst</th><th>Refuels sea/tkr/boat</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+    <div class="legend" style="border:none;padding-top:10px;">CV = std ÷ mean (lower = steadier). Time-to-loss
+      = hours until a boat is lost, on the voyages that fail.</div>
+  </section>
+  <section><h2>What it says</h2><ul class="takeaways" id="takeaways"></ul></section>
+  <footer id="footer"></footer>
+</div>
+<div id="tip"></div>
+
+<script>
+const DATA = /*__MC_DATA__*/;
+const SVGNS="http://www.w3.org/2000/svg";
+const el=(t,a={})=>{const e=document.createElementNS(SVGNS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const cfgs=DATA.configs, pct=v=>Math.round(v*100)+'%', R=Math.round;
+const best=cfgs.reduce((a,b)=>(b.survival>a.survival||(b.survival===a.survival&&b.cv<a.cv))?b:a);
+const worst=cfgs.reduce((a,b)=>b.survival<a.survival?b:a);
+const haveTotals=cfgs.every(c=>typeof c.total==='number');
+const totals=cfgs.map(c=>c.total), equalTotal=haveTotals && totals.every(t=>t===totals[0]);
+
+/* header text */
+document.getElementById('eyebrow').textContent=`Monte Carlo · ${DATA.runs} random voyages per config`;
+document.getElementById('title').textContent = DATA.title
+  || (equalTotal ? 'Same fuel, different split — which fleet is steadiest?'
+                 : 'Configuration stability — Monte Carlo');
+document.getElementById('lede').innerHTML = (equalTotal
+  ? `Every fleet carries the <b>same ${totals[0].toLocaleString()} lb of total tanker fuel</b>, split differently. `
+  : `Each configuration below was run under otherwise-identical conditions. `)
+  + `Each ran <b>${DATA.runs} random-spawn voyages</b>. The question isn't the average catch — `
+  + `it's <b>reliability</b>: how often every boat survives, and how much the haul swings voyage to voyage.`;
+
+document.getElementById('c-head').textContent=best.label;
+document.getElementById('c-sub').innerHTML=`is the steadiest — <b>${pct(best.survival)} of voyages keep every boat</b>, `
+  +`the lowest catch variance (CV ${best.cv.toFixed(2)}), ~${R(best.mean)} fish on average.`;
+
+/* survival bars */
+(function(){
+  const svg=document.getElementById('bars'), W=720, padL=124, padR=54, top=14, rowH=Math.min(56,(180)/cfgs.length), bw=Math.min(30,rowH*0.55);
+  svg.setAttribute('viewBox',`0 0 720 ${top+cfgs.length*rowH+26}`);
+  const x=v=>padL+(W-padL-padR)*v;
+  [0,.25,.5,.75,1].forEach(t=>{
+    svg.appendChild(el('line',{x1:x(t),y1:top-4,x2:x(t),y2:top+cfgs.length*rowH-10,stroke:'var(--grid)','stroke-width':1}));
+    const tx=el('text',{x:x(t),y:top+cfgs.length*rowH+6,'text-anchor':'middle','font-size':11});tx.textContent=R(t*100)+'%';svg.appendChild(tx);
+  });
+  cfgs.forEach((c,i)=>{const cy=top+i*rowH+rowH/2-6;
+    const lab=el('text',{x:padL-12,y:cy+4,'text-anchor':'end','font-size':13,fill:'var(--ink)'});lab.textContent=c.label;svg.appendChild(lab);
+    svg.appendChild(el('rect',{x:padL,y:cy-bw/2,width:x(1)-padL,height:bw,rx:4,fill:'var(--panel-2)',stroke:'var(--line)','stroke-width':1}));
+    svg.appendChild(el('rect',{x:padL,y:cy-bw/2,width:Math.max(4,x(c.survival)-padL),height:bw,rx:4,fill:c===best?'var(--surv)':'var(--accent)',opacity:c===best?1:.55}));
+    const v=el('text',{x:x(c.survival)+8,y:cy+4,'font-size':13,fill:'var(--ink)','font-weight':650});v.textContent=pct(c.survival);svg.appendChild(v);
+  });
+})();
+
+/* catch distribution strip */
+(function(){
+  const svg=document.getElementById('strip'), W=720, padL=124, padR=24, top=18, rowH=Math.max(64,Math.min(84,300/cfgs.length)), band=rowH*0.34;
+  svg.setAttribute('viewBox',`0 0 720 ${top+cfgs.length*rowH+20}`);
+  const allmax=Math.max(...cfgs.flatMap(c=>c.catches)), xmax=Math.ceil(allmax/100)*100||100;
+  const x=v=>padL+(W-padL-padR)*Math.min(v,xmax)/xmax;
+  const ticks=[];for(let t=0;t<=xmax;t+=Math.max(100,Math.round(xmax/3/100)*100))ticks.push(t);
+  ticks.forEach(t=>{svg.appendChild(el('line',{x1:x(t),y1:top-6,x2:x(t),y2:top+cfgs.length*rowH-14,stroke:'var(--grid)','stroke-width':1}));
+    const tx=el('text',{x:x(t),y:top+cfgs.length*rowH+2,'text-anchor':'middle','font-size':11});tx.textContent=t;svg.appendChild(tx);});
+  const axl=el('text',{x:x(xmax/2),y:top+cfgs.length*rowH+18,'text-anchor':'middle','font-size':11,'letter-spacing':'.12em'});axl.textContent='FISH LANDED PER VOYAGE →';svg.appendChild(axl);
+  const tip=document.getElementById('tip');
+  cfgs.forEach((c,i)=>{const cy=top+i*rowH+band+4;
+    const lab=el('text',{x:padL-12,y:cy-band+2,'text-anchor':'end','font-size':13,fill:'var(--ink)'});lab.textContent=c.label;svg.appendChild(lab);
+    c.catches.forEach((val,k)=>{const j=((k*2654435761)>>>0)/4294967295, dy=cy+(j-0.5)*2*band, dead=c.deaths[k]===1;
+      const dot=dead?el('circle',{cx:x(val),cy:dy,r:4,fill:'none',stroke:'var(--lost)','stroke-width':2})
+                    :el('circle',{cx:x(val),cy:dy,r:4,fill:'var(--surv)',opacity:.9});
+      dot.addEventListener('pointerenter',ev=>{tip.style.opacity=1;tip.textContent=`${c.label}: ${val} fish · ${dead?'boat lost':'survived'}`;tip.style.left=ev.clientX+'px';tip.style.top=ev.clientY+'px';});
+      dot.addEventListener('pointermove',ev=>{tip.style.left=ev.clientX+'px';tip.style.top=ev.clientY+'px';});
+      dot.addEventListener('pointerleave',()=>tip.style.opacity=0);svg.appendChild(dot);});
+    svg.appendChild(el('line',{x1:x(c.median),y1:cy-band-4,x2:x(c.median),y2:cy+band+4,stroke:'var(--ink)','stroke-width':2}));
+  });
+})();
+
+/* refuel cycling — grouped horizontal bars per config */
+(function(){
+  const svg=document.getElementById('cyc');
+  if(cfgs[0].sea_ref==null){document.getElementById('cyc-section').style.display='none';return;}
+  const W=720,padL=124,padR=44,top=12,rowH=Math.min(66,236/cfgs.length);
+  svg.setAttribute('viewBox',`0 0 720 ${top+cfgs.length*rowH+24}`);
+  const keys=[['sea_ref','var(--c1)'],['dock_t_ref','var(--c2)'],['dock_b_ref','var(--c3)']];
+  const xmax=Math.max(...cfgs.flatMap(c=>keys.map(k=>c[k[0]])))*1.08||1;
+  const x=v=>padL+(W-padL-padR)*v/xmax;
+  const step=Math.max(50,Math.round(xmax/4/50)*50);
+  for(let t=0;t<=xmax;t+=step){svg.appendChild(el('line',{x1:x(t),y1:top-2,x2:x(t),y2:top+cfgs.length*rowH-6,stroke:'var(--grid)','stroke-width':1}));
+    const tx=el('text',{x:x(t),y:top+cfgs.length*rowH+8,'text-anchor':'middle','font-size':11});tx.textContent=t;svg.appendChild(tx);}
+  cfgs.forEach((c,i)=>{const y0=top+i*rowH;
+    const lab=el('text',{x:padL-12,y:y0+15,'text-anchor':'end','font-size':13,fill:'var(--ink)'});lab.textContent=c.label;svg.appendChild(lab);
+    const bh=(rowH-16)/3;
+    keys.forEach((k,j)=>{const by=y0+4+j*bh, v=c[k[0]];
+      svg.appendChild(el('rect',{x:padL,y:by,width:Math.max(2,x(v)-padL),height:bh-1.5,rx:2,fill:k[1]}));
+      const t=el('text',{x:x(v)+4,y:by+bh-2.5,'font-size':10,fill:'var(--muted)'});t.textContent=R(v);svg.appendChild(t);});
+  });
+})();
+
+/* table */
+(function(){const tb=document.querySelector('#tbl tbody');
+  const hl=m=>m==null?'—':(m/60).toFixed(0)+'h';
+  const rf=c=>c.sea_ref==null?'—':`${R(c.sea_ref)}/${R(c.dock_t_ref)}/${R(c.dock_b_ref)}`;
+  cfgs.forEach(c=>{const tr=document.createElement('tr');if(c===best)tr.className='best';
+    tr.innerHTML=`<td>${c.label}</td><td>${pct(c.survival)}</td><td>${R(c.mean)} ± ${R(c.std)}</td>`
+      +`<td>${c.cv.toFixed(2)}</td><td>${hl(c.loss_med_min)} / ${hl(c.loss_min_min)}</td><td>${rf(c)}</td>`;
+    tb.appendChild(tr);});
+})();
+
+/* takeaways (data-driven) */
+(function(){const ul=document.getElementById('takeaways');
+  const lines=[
+    `<b>${best.label} is the most reliable.</b> It survives <b>${pct(best.survival)}</b> of voyages vs `
+      +`<b>${pct(worst.survival)}</b> for ${worst.label}${best.mean>=worst.mean?' — and lands more fish on average too':''}.`,
+    `<b>It's steadier, not just higher.</b> Catch variance is CV <b>${best.cv.toFixed(2)}</b> vs `
+      +`${worst.cv.toFixed(2)}; its worst-tenth voyage still catches <b>${R(best.p10)}</b> fish (vs ${R(worst.p10)}).`,
+    `<b>Read the spread, not the mean.</b> A tight high cluster with few rings is a dependable fleet; `
+      +`a long low tail of hollow rings marks the voyages where coverage broke and a boat starved.`
+  ];
+  lines.forEach(t=>{const li=document.createElement('li');li.innerHTML=t;ul.appendChild(li);});
+})();
+
+document.getElementById('footer').innerHTML=`<b>Method.</b> Scripted logistics controller (no learning); `
+  +`${DATA.runs} independent random seeds per fleet — fish spawns differ every voyage. `
+  +`"Survival" = zero boats lost over the voyage.`
+  +(equalTotal?` All fleets hold total tanker fuel constant at ${totals[0].toLocaleString()} lb.`:'');
+</script>
