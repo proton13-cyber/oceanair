@@ -78,11 +78,15 @@ class FishingEnv:
         return c.easy_tank_mult + self.stage * (c.hard_tank_mult - c.easy_tank_mult)
 
     def _spawn_band(self):
-        c = self.cfg.curriculum
-        if not c.enabled:
-            return c.hard_min_x, c.hard_max_x
-        lo = c.easy_min_x + self.stage * (c.hard_min_x - c.easy_min_x)
-        hi = c.easy_max_x + self.stage * (c.hard_max_x - c.easy_max_x)
+        c = self.cfg
+        # hard (stage 1.0) band comes from the single theater-depth control
+        hmin = c.grounds_center_x - c.grounds_half_span
+        hmax = c.grounds_center_x + c.grounds_half_span
+        cur = c.curriculum
+        if not cur.enabled:
+            return hmin, hmax
+        lo = cur.easy_min_x + self.stage * (hmin - cur.easy_min_x)
+        hi = cur.easy_max_x + self.stage * (hmax - cur.easy_max_x)
         return lo, hi
 
     # ---- reset --------------------------------------------------------------
@@ -117,8 +121,7 @@ class FishingEnv:
                 fuel=cfg.barge.tank, role="barge")
 
         self.fish = []
-        n_schools = int(self.rng.integers(2, cfg.max_schools + 1))
-        for _ in range(n_schools):
+        for _ in range(max(0, cfg.initial_schools)):   # small seed; the rest accumulate over time
             self._spawn_school()
 
         infos = {a: {} for a in self.agents}
@@ -204,8 +207,9 @@ class FishingEnv:
             # be still; everyone else must keep moving (>= min_speed_frac of max)
             moored = (e.role == "boat" and e.refueling
                       and self._near_barge(e, cfg.refuel_radius))
-            grounded = (e.role == "boat"
-                        and np.linalg.norm(e.pos - np.array(cfg.port_pos)) <= cfg.port_radius)
+            # anything sitting at the dock may be still (boats on the deck, and
+            # reserve tankers parked on the tarmac between wave deployments)
+            grounded = np.linalg.norm(e.pos - np.array(cfg.port_pos)) <= cfg.port_radius
             floor = 0.0 if (moored or grounded) else cfg.min_speed_frac * dyn.max_speed
             target_speed = max(floor, throttle * dyn.max_speed)
             if e.fuel <= 0.0:          # (A) out of fuel -> dead in the water
@@ -275,7 +279,10 @@ class FishingEnv:
                 bt = self.ent[f"boat_{j}"]
                 if not bt.alive:
                     continue
-                if np.linalg.norm(b.pos - bt.pos) <= cfg.refuel_radius and b.fuel > 0:
+                # a boat only takes fuel when it has COMMITTED to a refuel stop (low
+                # and latched) — no unrealistic tickle-topping of boats passing by
+                if (bt.refueling and b.fuel > 0
+                        and np.linalg.norm(b.pos - bt.pos) <= cfg.refuel_radius):
                     want = cfg.boat.tank - bt.fuel
                     amount = min(cfg.transfer_rate * cfg.dt, b.fuel, want)
                     if amount > 0:

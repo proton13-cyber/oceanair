@@ -10,7 +10,7 @@
 
 Any dotted parameter path works, e.g.:
     n_barges  barge.tank  boat.idle_burn  boat.turn_agility  harpoon_ammo
-    fish_speed_frac  max_fish  curriculum.hard_max_x  harpoon_ammo
+    fish_speed_frac  max_fish  grounds_center_x  harpoon_ammo
 
 Each cell = survive% (mean catches) over the seeds at the given curriculum stage,
 using the scripted heuristic controller.

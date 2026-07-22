@@ -255,9 +255,15 @@ def write_study_template(path):
     doc["scare_radius"] = c.scare_radius             # nmi a tanker scares fish
     doc["barge_avoid_radius"] = c.barge_avoid_radius # nmi tankers keep off fish
 
-    sect("=== SPAWN BAND (curriculum, stage 1.0 = hard) ===")
-    doc["curriculum.hard_min_x"] = cur.hard_min_x    # fraction of world width
-    doc["curriculum.hard_max_x"] = cur.hard_max_x
+    sect("=== THEATER DEPTH (single knob pushes the whole operating area out) ===")
+    doc["grounds_center_x"] = c.grounds_center_x     # center of fish grounds (fraction of width); raise to push everything DEEPER
+    doc["grounds_half_span"] = c.grounds_half_span   # half the fish band width (band = center +/- this)
+
+    sect("=== TANKER STAGING / DEFENSE ===")
+    doc["barge_stage_standoff"] = c.barge_stage_standoff  # tanker line this far port-side of grounds center
+    doc["barge_stage_y"] = c.barge_stage_y           # tanker loiter center (fraction of height)
+    doc["barge_loiter_radius"] = c.barge_loiter_radius    # nmi width of the tanker loiter loop
+    doc["boat_defend_radius"] = c.boat_defend_radius # nmi: fish within this of a tanker -> nearest boat intercepts
 
     with open(path, "w") as fh:
         json.dump(doc, fh, indent=2)

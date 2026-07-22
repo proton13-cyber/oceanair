@@ -32,8 +32,8 @@ class Curriculum:
     # depends on forward barges (it can only refuel from barges, never port).
     easy_min_x: float = 0.30
     easy_max_x: float = 0.50
-    hard_min_x: float = 0.20   # grounds 200-400 nmi out: far enough to need barge fuel
-    hard_max_x: float = 0.40   # support, close enough that dock reload runs stay affordable
+    # the HARD (stage 1.0) band is derived from grounds_center_x +/- grounds_half_span
+    # on the Config below — that is the single "theater depth" control.
     # fuel generosity multiplier from easy->hard:
     easy_tank_mult: float = 1.5
     hard_tank_mult: float = 1.0
@@ -55,6 +55,12 @@ class Config:
     accel_frac: float = 0.15   # momentum: speed can change by at most this fraction of max_speed per step
     loiter_radius: float = 180.0  # nmi — when idle (no fish), boats patrol a ring this wide instead of piling on one point
     loiter_spin: float = 0.015    # rad/step the patrol ring rotates, so idle boats sweep wide arcs instead of spinning in place
+    barge_stage_standoff: float = 0.12  # tanker loiter line sits this fraction of width PORT-SIDE of the grounds center (so tankers stay just behind the fish band)
+    barge_stage_y: float = 0.50  # tanker loiter-loop center as a fraction of world HEIGHT
+    barge_waves: int = 1         # split tankers into this many cadence groups; each wave deploys forward only after the one before it has begun refueling boats, so they cycle OUT OF PHASE. 1 = all deploy together
+    barge_wave_trigger: int = 1  # EVENT-based release: the next wave launches once this many at-sea refuels have happened (robust to stochastic timing vs a fixed clock). A not-yet-released wave PARKS at the dock, topped up, not burning fuel
+    barge_loiter_radius: float = 110.0  # nmi — idle tankers fly a wide loiter loop this wide around the staging point (like the boats), spread by phase
+    boat_defend_radius: float = 120.0  # nmi — a fish within this of a live tanker is a THREAT; the nearest boat is dispatched to intercept it before normal fishing
     harpoon_range: float = 40.0   # nmi — boats harpoon fish from ~AIM-120 mid range (vs the close-net catch_radius)...
     harpoon_cooldown: int = 8     # ...must reload this many steps between shots...
     harpoon_ammo: int = 8         # ...and carry only this many harpoons before returning to the dock to restock
@@ -79,14 +85,18 @@ class Config:
     # Fish travel in schools. Each episode has a random number of schools (< 10), and
     # they swim (slower than boats). Sparse on purpose so boats must range for them.
     max_fish: int = 9                 # total fish cap across all schools (sparse)
-    max_schools: int = 6              # episode spawns a random 2..max_schools schools
+    max_schools: int = 6              # cap on how many schools can be on the map at once
+    initial_schools: int = 1          # schools present at t=0 (keep low so fish ACCUMULATE over time instead of dumping a full map at the start)
     school_size: int = 3              # fish per school
     school_spawn_prob: float = 0.05   # per-step chance to add a fresh school (under cap)
     fish_speed_frac: float = 0.40     # fish swim at 40% of boat max speed
     fish_wander: float = 0.20         # random heading change per step (radians)
     school_spread: float = 25.0       # nmi jitter of fish around their school centre
     fish_barge_clearance_mult: float = 2.0  # schools spawn >= this * scare_radius from any barge
-    # fish spawn randomly within this X (curriculum band) / Y band
+    # ---- theater depth: the single knob that pushes the whole operating area out ----
+    grounds_center_x: float = 0.30  # center of the fishing grounds as a fraction of world WIDTH; raise it to push fish (and, via the standoff, the tankers and boat patrol) DEEPER into the ocean
+    grounds_half_span: float = 0.10  # half the fish band's X-width (band = center +/- this); 0.10 -> a 0.20-wide band
+    # fish spawn randomly within the grounds band (X) and this Y band
     fish_y_min: float = 0.35
     fish_y_max: float = 0.65
 

@@ -85,16 +85,44 @@ def boat_actions(env, cfg) -> dict:
         else:
             fishing.append(i)
 
-    # finders-keepers: assign each fishing boat a unique fish, nearest pair first
+    # DEFENSE FIRST, then finders-keepers. Fish that have drifted near a live tanker
+    # are threats (they hurt the barges), so the nearest boat is dispatched to
+    # intercept each one before any normal fishing. Remaining boats then claim their
+    # nearest fish as usual (unique fish per boat, nearest pair first).
     claims = {}
     if env.fish and fishing:
+        taken_boat, taken_fish = set(), set()
+
+        # (a) threat fish: within defend_radius of a live tanker; most-threatening
+        #     (closest to a tanker) handled first, each grabbing its nearest free boat
+        threats = []
+        for fj, f in enumerate(env.fish):
+            dmin = min((np.linalg.norm(env.ent[f"barge_{k}"].pos - f.pos)
+                        for k in range(cfg.n_barges) if env.ent[f"barge_{k}"].alive),
+                       default=float("inf"))
+            if dmin <= cfg.boat_defend_radius:
+                threats.append((dmin, fj))
+        for _, fj in sorted(threats, key=lambda x: x[0]):
+            fp = env.fish[fj].pos
+            cand = [(float(np.linalg.norm(env.ent[f"boat_{i}"].pos - fp)), i)
+                    for i in fishing if i not in taken_boat]
+            if cand:
+                _, i = min(cand)
+                claims[i] = fp
+                taken_boat.add(i)
+                taken_fish.add(fj)
+
+        # (b) normal finders-keepers for the boats/fish not spoken for
         pairs = []
         for i in fishing:
+            if i in taken_boat:
+                continue
             ep = env.ent[f"boat_{i}"].pos
             for fj, f in enumerate(env.fish):
+                if fj in taken_fish:
+                    continue
                 pairs.append((float(np.linalg.norm(f.pos - ep)), i, fj))
         pairs.sort(key=lambda x: x[0])
-        taken_boat, taken_fish = set(), set()
         for _, i, fj in pairs:
             if i in taken_boat or fj in taken_fish:
                 continue
@@ -108,7 +136,7 @@ def boat_actions(env, cfg) -> dict:
     # target never sits still, keeping way on the boats -> wide arcs, no spin-in-place.
     centroid = (np.mean(np.stack([f.pos for f in env.fish]), axis=0)
                 if env.fish else None)
-    grounds = np.array([0.30 * cfg.world_width, 0.5 * cfg.world_height])
+    grounds = np.array([cfg.grounds_center_x * cfg.world_width, 0.5 * cfg.world_height])
     loiter_center = centroid if centroid is not None else grounds
     nb = max(1, cfg.n_boats)
     for i in fishing:
@@ -149,14 +177,22 @@ class HeuristicPolicy:
         # rendezvous with it; (3) otherwise stage forward, evading fish.
         # Assignment DISTRIBUTES: each low boat gets its OWN nearest available barge, so
         # adding barges actually increases coverage instead of all piling on one boat.
-        centroid = (np.mean(np.stack([f.pos for f in env.fish]), axis=0)
-                    if env.fish else port.copy())
+        # idle tankers fly a forward loiter loop (see priority 4 below); low tankers
+        # still peel off to refuel and are assigned to low boats.
 
         going_port = {}
         # worst-case burn per step if the barge ran home at full cruise
         home_burn = cfg.barge.idle_burn + cfg.barge.move_burn * cfg.barge.max_speed
+        held_back = {}   # tankers in a later wave, still parked at the dock
         for i in range(cfg.n_barges):
             b = env.ent[f"barge_{i}"]
+            # echelon cadence: split the fleet into waves (contiguous blocks); a later
+            # wave stays PARKED at the dock (topped up, not burning fuel) until the
+            # wave before it has begun working — released once the cumulative at-sea
+            # refuel count reaches wave*barge_wave_trigger. Event-based, not clock-
+            # based, so it tracks the real (stochastic) operational tempo.
+            wave = (i * max(1, cfg.barge_waves)) // max(1, cfg.n_barges)
+            held_back[i] = env._sea_refuels < wave * cfg.barge_wave_trigger
             thr = 0.15 + 0.20 * (i / max(1, cfg.n_barges - 1))
             at_port = np.linalg.norm(b.pos - port) <= cfg.port_radius
             servicing = at_port and b.dock_timer < cfg.barge_dock_service_steps
@@ -182,7 +218,7 @@ class HeuristicPolicy:
             cand = [(np.linalg.norm(env.ent[f"barge_{i}"].pos - bt.pos), i)
                     for i in range(cfg.n_barges)
                     if env.ent[f"barge_{i}"].alive and not going_port[i]
-                    and i not in used]
+                    and not held_back[i] and i not in used]
             if cand:
                 _, bi = min(cand)
                 assigned[bi] = bt
@@ -192,6 +228,13 @@ class HeuristicPolicy:
             b = env.ent[f"barge_{i}"]
             if not b.alive:
                 continue   # lost tanker — removed from the sim
+
+            # 0) reserve wave: sit on the tarmac (steer to port, park there topped up)
+            # until this wave's deployment time. Conserves fuel for a fresh sortie.
+            if held_back[i]:
+                actions[f"barge_{i}"] = _steer_towards(
+                    b.pos, b.heading, port, cfg.barge.max_turn_rate)
+                continue
 
             # 1) own fuel low (or servicing at the dock) -> head to port. Self-
             # preservation outranks dodging: a stranded, empty barge is worse than
@@ -242,15 +285,17 @@ class HeuristicPolicy:
                         b.pos, b.heading, flee, cfg.barge.max_turn_rate)
                     continue
 
-            direction = centroid - port
-            dist = np.linalg.norm(direction)
-            if dist > 1e-6:
-                unit = direction / dist
-                standoff = max(0.0, dist - cfg.scare_radius * 1.6)
-                lateral = np.array([-unit[1], unit[0]]) * (i - (cfg.n_barges - 1) / 2) * 60
-                target = port + unit * standoff + lateral
-            else:
-                target = port
+            # forward loiter loop: idle tankers fly a wide, slowly rotating loop
+            # around an explicit staging point out in the ocean (like the boats'
+            # patrol ring). Each tanker gets its own phase slot so they spread out.
+            # Raise grounds_center_x (theater depth) to forward-stage further out —
+            # as long as tanks are big enough that the reserve still lets them home.
+            depth_frac = cfg.grounds_center_x - cfg.barge_stage_standoff
+            stage_center = np.array([depth_frac * cfg.world_width,
+                                     cfg.barge_stage_y * cfg.world_height])
+            ang = 2 * math.pi * i / max(1, cfg.n_barges) + cfg.loiter_spin * env.t
+            target = stage_center + cfg.barge_loiter_radius * np.array(
+                [math.cos(ang), math.sin(ang)])
             actions[f"barge_{i}"] = _steer_towards(
                 b.pos, b.heading, np.asarray(target), cfg.barge.max_turn_rate)
 

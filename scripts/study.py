@@ -23,7 +23,7 @@ Example study.json::
 
 Control keys: runs, stage, base_config, report, out, json. Friendly aliases (tankers,
 harpoons, tank, fish, ...) map to the real parameter names; dotted paths like
-"boat.idle_burn" or "curriculum.hard_max_x" also work. Up to 3 swept parameters.
+"boat.idle_burn" or "grounds_center_x" (theater depth) also work. Up to 3 swept parameters.
 """
 from __future__ import annotations
 
