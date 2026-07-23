@@ -416,7 +416,12 @@ class HeuristicPolicy:
             # patrol ring). Each tanker gets its own phase slot so they spread out.
             # Raise grounds_center_x (theater depth) to forward-stage further out —
             # as long as tanks are big enough that the reserve still lets them home.
-            depth_frac = cfg.grounds_center_x - cfg.barge_stage_standoff
+            # stage near the operating area: the fish grounds (fishing) or, in escort
+            # mode, just west of the reefs where the escorts/dive boats cycle to refuel
+            # (staging at the far-left fishing default would strand tankers out east).
+            anchor = (cfg.shellfish_center_x if cfg.game_mode == "escort"
+                      else cfg.grounds_center_x)
+            depth_frac = anchor - cfg.barge_stage_standoff
             stage_center = np.array([depth_frac * cfg.world_width,
                                      cfg.barge_stage_y * cfg.world_height])
             ang = 2 * math.pi * i / max(1, cfg.n_barges) + cfg.loiter_spin * env.t

@@ -12,7 +12,7 @@
 
   "world_width": 1500.0,
   "world_height": 1000.0,
-  "max_steps": 3600,
+  "max_steps": 960,
 
   "_layout": "port(0.10) -> tankers -> reefs/F-18s(0.55) -> A-4 threats enter from the east(0.85)",
   "shellfish_center_x": 0.55,
