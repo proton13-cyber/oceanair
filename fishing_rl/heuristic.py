@@ -94,6 +94,45 @@ def boat_actions(env, cfg) -> dict:
         else:
             fishing.append(i)
 
+    if cfg.game_mode == "escort":
+        # Escorts don't harvest — they SCREEN the dive boats. Each threat fish (ranked by
+        # how close it is to a dive boat) is intercepted by the nearest free escort, which
+        # flies to pull it into AMRAAM range (the env fires the shot). Idle escorts hold a
+        # screen line on the THREAT SIDE (between the dive boats and where the A-4s enter).
+        dives = [env.ent[f"dive_{i}"] for i in range(cfg.n_dive_boats)
+                 if env.ent[f"dive_{i}"].alive]
+        nb = max(1, cfg.n_boats)
+        assigned = {}
+        if dives and env.fish:
+            def urgency(f):   # smaller = more urgent (closest to a dive boat)
+                return min(np.linalg.norm(f.pos - d.pos) for d in dives)
+            used = set()
+            for f in sorted(env.fish, key=urgency):
+                cand = [(np.linalg.norm(env.ent[f"boat_{i}"].pos - f.pos), i)
+                        for i in fishing if i not in used]
+                if cand:
+                    _, bi = min(cand)
+                    assigned[bi] = f.pos
+                    used.add(bi)
+        # screen point: east of the dive-boat centroid, toward the fish-spawn side
+        if dives:
+            cen = np.mean([d.pos for d in dives], axis=0)
+            spawn_x = cfg.fish_spawn_center_x * cfg.world_width
+            screen = np.array([0.5 * (cen[0] + spawn_x), cen[1]])
+        else:
+            screen = np.array([cfg.shellfish_center_x * cfg.world_width,
+                               0.5 * cfg.world_height])
+        for i in fishing:
+            e = env.ent[f"boat_{i}"]
+            if i in assigned:
+                target = assigned[i]
+            else:
+                ang = 2 * math.pi * i / nb + cfg.loiter_spin * env.t
+                target = screen + cfg.loiter_radius * np.array([math.cos(ang), math.sin(ang)])
+            actions[f"boat_{i}"] = _steer_towards(
+                e.pos, e.heading, np.asarray(target), cfg.boat.max_turn_rate)
+        return actions
+
     # DEFENSE FIRST, then finders-keepers. Fish that have drifted near a live tanker
     # are threats (they hurt the barges), so the nearest boat is dispatched to
     # intercept each one before any normal fishing. Remaining boats then claim their
@@ -175,6 +214,76 @@ def boat_actions(env, cfg) -> dict:
     return actions
 
 
+def dive_actions(env, cfg) -> dict:
+    """Escort-mode F-18 dive boats: hunt shellfish, rearm/refuel, break off if a fish
+    gets right on top of them (they lean on the escorts for protection)."""
+    actions = {}
+    port = np.array(cfg.port_pos)
+    turn = cfg.dive.max_turn_rate
+    home_burn = cfg.dive.idle_burn + cfg.dive.move_burn * cfg.dive.max_speed
+    shell_center = np.array([cfg.shellfish_center_x * cfg.world_width,
+                             0.5 * cfg.world_height])
+    ndv = max(1, cfg.n_dive_boats)
+    for i in range(cfg.n_dive_boats):
+        e = env.ent[f"dive_{i}"]
+        if not e.alive:
+            e.refueling = False
+            actions[f"dive_{i}"] = np.array([-1.0, 0.0])
+            continue
+        # rearm latch: out of Mavericks -> RTB to the dock to restock
+        if e.reloading:
+            if e.maverick_ammo >= cfg.maverick_ammo:
+                e.reloading = False
+        elif e.maverick_ammo <= 0:
+            e.reloading = True
+        # bingo-fuel latch: distance-aware to the nearest live tanker (else the dock)
+        alive_barges = [env.ent[f"barge_{k}"] for k in range(cfg.n_barges)
+                        if env.ent[f"barge_{k}"].alive]
+        d_tanker = (min(np.linalg.norm(b.pos - e.pos) for b in alive_barges)
+                    if alive_barges else np.linalg.norm(port - e.pos))
+        bingo = (d_tanker / max(cfg.dive.max_speed, 1e-6)) * home_burn * 1.5
+        if e.refueling:
+            if e.fuel >= cfg.refuel_full_frac * cfg.dive.tank:
+                e.refueling = False
+        elif e.fuel < 0.35 * cfg.dive.tank or e.fuel < bingo:
+            e.refueling = True
+
+        # priority: rearm at dock > refuel at tanker > dodge a point-blank fish >
+        #           strike nearest reef > loiter on the reef band
+        if e.reloading:
+            actions[f"dive_{i}"] = _steer_towards(e.pos, e.heading, port, turn)
+            continue
+        if e.refueling:
+            tgt = (min(alive_barges, key=lambda b: np.linalg.norm(b.pos - e.pos)).pos
+                   if alive_barges else port)
+            actions[f"dive_{i}"] = _steer_towards(e.pos, e.heading, np.asarray(tgt), turn)
+            continue
+        danger = [f for f in env.fish
+                  if np.linalg.norm(f.pos - e.pos) < 0.5 * cfg.aa12_range]
+        if danger:
+            repel = np.zeros(2)
+            for f in danger:
+                d = e.pos - f.pos
+                dd = np.linalg.norm(d) + 1e-6
+                repel += d / (dd * dd)
+            nrm = np.linalg.norm(repel)
+            if nrm > 1e-9:
+                flee = e.pos + (repel / nrm) * 100.0
+                actions[f"dive_{i}"] = _steer_towards(e.pos, e.heading, flee, turn)
+                continue
+        if env.shellfish:
+            reef = min(env.shellfish, key=lambda r: np.linalg.norm(r.pos - e.pos)).pos
+            act = _steer_towards(e.pos, e.heading, np.asarray(reef), turn)
+            if np.linalg.norm(reef - e.pos) <= cfg.maverick_range:
+                act = np.array([-0.3, act[1]])   # ease off in the strike pocket
+            actions[f"dive_{i}"] = act
+            continue
+        ang = 2 * math.pi * i / ndv + cfg.loiter_spin * env.t
+        tgt = shell_center + cfg.loiter_radius * np.array([math.cos(ang), math.sin(ang)])
+        actions[f"dive_{i}"] = _steer_towards(e.pos, e.heading, np.asarray(tgt), turn)
+    return actions
+
+
 class HeuristicPolicy:
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -183,8 +292,10 @@ class HeuristicPolicy:
         cfg = self.cfg
         port = np.array(cfg.port_pos)
 
-        # --- boats (scripted, finders-keepers) ---
+        # --- boats (scripted, finders-keepers / escort screen) ---
         actions = boat_actions(env, cfg)
+        if cfg.game_mode == "escort":     # --- dive boats (escort mode strikers) ---
+            actions.update(dive_actions(env, cfg))
 
         # --- barges ---
         # Priority per barge: (1) refill at port if own fuel is low (staggered by index

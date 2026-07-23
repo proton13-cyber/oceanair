@@ -42,8 +42,10 @@ class Curriculum:
 @dataclass
 class Config:
     # ---- fleet ----
+    game_mode: str = "fishing"  # "fishing" (classic) or "escort" (F-15s defend F-18 dive boats harvesting shellfish)
     n_boats: int = 4
     n_barges: int = 8
+    n_dive_boats: int = 0       # escort mode only: F-18 strikers that harvest shellfish (0 keeps fishing mode inert)
 
     # ---- world ----
     world_width: float = 1000.0       # nmi, east-west (x)
@@ -66,6 +68,8 @@ class Config:
     harpoon_speed: float = 44.0   # nmi/min ~Mach 4 AMRAAM (cosmetic: the projectile animation; the catch itself is instant within range)
     harpoon_cooldown: int = 8     # ...must reload this many steps between shots...
     harpoon_ammo: int = 8         # ...and carry only this many missiles before returning to the dock to restock
+    amraam_pk_near: float = 0.95  # escort mode: AIM-120 kill probability point-blank... (fishing-mode catch stays deterministic)
+    amraam_pk_far: float = 0.55   # ...falling to this at max harpoon_range
     dock_service_steps: int = 45       # min a boat sits on the deck to rearm + refuel (1 step = 1 min)
     barge_dock_service_steps: int = 25  # min a tanker sits at the dock to fully refuel
     refuel_full_frac: float = 0.90  # a refueling boat floats alongside the barge until this full (dwell, not instant)
@@ -82,6 +86,11 @@ class Config:
         max_speed=7.67, max_turn_rate=0.10, tank=200000.0,  # 460 kts; ~200k lb fuel
         idle_burn=120.0, move_burn=8.2,                    # cruise ~11000 lb/hr (183 lb/step)
         turn_agility=0.6))                                 # big jet -> wide turns
+    # Dive boat = F/A-18E Super Hornet analog (escort-mode striker; AGM-65 Maverick).
+    dive: Dynamics = field(default_factory=lambda: Dynamics(
+        max_speed=8.0, max_turn_rate=0.30, tank=18000.0,   # ~480 kts; a touch less legs/agility than the F-15
+        idle_burn=70.0, move_burn=8.1,
+        turn_agility=0.9))
 
     # ---- fish ----
     # Fish travel in schools. Each episode has a random number of schools (< 10), and
@@ -111,6 +120,34 @@ class Config:
     transfer_rate: float = 2000.0     # lb / step, barge -> boat (aerial-refuel offload rate)
     port_refill_rate: float = 4000.0  # lb / step, port -> barge (fast dockside pumping)
 
+    # ---- escort mode: shellfish (dive-boat strike targets) ----
+    # Reefs sit in their OWN depth band so you can mission-plan how deep the strike goes.
+    shellfish_center_x: float = 0.45   # reef band center (fraction of world width)
+    shellfish_half_span: float = 0.08  # half the reef band's X-width
+    shellfish_y_min: float = 0.30
+    shellfish_y_max: float = 0.70
+    shellfish_min_active: int = 2      # always keep at least this many reefs up
+    shellfish_max_active: int = 5      # never more than this many at once
+    shellfish_respawn_prob: float = 0.50  # chance a struck reef is replaced by a fresh one
+
+    # ---- escort mode: weapons (range triangle: AMRAAM 86 > AA-12 44 > Maverick 13) ----
+    aa12_range: float = 44.0      # nmi — AA-12 Adder (R-77); fish fire at dive boats
+    aa12_speed: float = 44.0      # nmi/min ~Mach 4 (cosmetic animation)
+    aa12_cooldown: int = 10       # steps a fish waits between AA-12 shots
+    aa12_pk_near: float = 0.60    # AA-12 kill probability point-blank...
+    aa12_pk_far: float = 0.15     # ...falling to this at aa12_range
+    maverick_range: float = 13.0  # nmi — AGM-65 Maverick; dive boats strike shellfish (must close in)
+    maverick_speed: float = 10.0  # nmi/min ~Mach 0.9 (cosmetic animation)
+    maverick_cooldown: int = 4    # steps between Maverick shots
+    maverick_ammo: int = 12       # Mavericks per dive boat before a dock rearm
+    maverick_pk_near: float = 0.95
+    maverick_pk_far: float = 0.70
+    fish_threat_speed_frac: float = 0.90  # escort mode: fish pursue dive boats at this fraction of boat speed (A-4)
+    # escort mode: A-4 threats enter from the RIGHT (east) side and drive in on the dive
+    # boats, giving the escorts a defined threat axis to screen.
+    fish_spawn_center_x: float = 0.85
+    fish_spawn_half_span: float = 0.10
+
     # ---- curriculum ----
     curriculum: Curriculum = field(default_factory=Curriculum)
 
@@ -124,8 +161,15 @@ class Config:
 
     @property
     def agent_names(self):
-        return ([f"boat_{i}" for i in range(self.n_boats)] +
-                [f"barge_{i}" for i in range(self.n_barges)])
+        names = ([f"boat_{i}" for i in range(self.n_boats)] +
+                 [f"barge_{i}" for i in range(self.n_barges)])
+        if self.game_mode == "escort":   # dive boats only exist in escort mode
+            names += [f"dive_{i}" for i in range(self.n_dive_boats)]
+        return names
 
     def role_of(self, name: str) -> str:
-        return "boat" if name.startswith("boat") else "barge"
+        if name.startswith("boat"):
+            return "boat"
+        if name.startswith("dive"):
+            return "dive"
+        return "barge"

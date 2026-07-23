@@ -1,0 +1,29 @@
+{
+  "_help": "Escort mode: F-15s defend F-18 dive boats harvesting shellfish. Sweep n_boats (escorts) x n_dive_boats and read dive_boats_lost / shellfish_harvested.",
+  "runs": 40,
+  "stage": 1.0,
+  "base_config": "fishing.toml",
+  "report": "runs/escort_report.html",
+  "json": "runs/escort_data.json",
+
+  "game_mode": "escort",
+  "n_boats": 8,
+  "n_dive_boats": 4,
+
+  "world_width": 1500.0,
+  "world_height": 1000.0,
+  "max_steps": 3600,
+
+  "_layout": "port(0.10) -> tankers -> reefs/F-18s(0.55) -> A-4 threats enter from the east(0.85)",
+  "shellfish_center_x": 0.55,
+  "shellfish_half_span": 0.06,
+  "shellfish_min_active": 3,
+  "shellfish_max_active": 5,
+
+  "_threats": "A-4s spawn on the right and drive in; keep them SPARSE",
+  "fish_spawn_center_x": 0.85,
+  "fish_spawn_half_span": 0.10,
+  "fish_threat_speed_frac": 0.9,
+  "max_fish": 4,
+  "school_size": 1
+}

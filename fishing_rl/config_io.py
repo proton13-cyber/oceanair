@@ -21,7 +21,7 @@ from dataclasses import fields
 
 from .config import Config
 
-_SUBOBJECTS = ("boat", "barge", "curriculum")
+_SUBOBJECTS = ("boat", "barge", "dive", "curriculum")
 
 
 def _parse_val(s):
@@ -170,6 +170,7 @@ def write_template(path):
     section("env", cfg, exclude=_SUBOBJECTS)
     section("boat", cfg.boat)
     section("barge", cfg.barge)
+    section("dive", cfg.dive)
     section("curriculum", cfg.curriculum)
     with open(path, "w") as fh:
         fh.write("\n".join(out))

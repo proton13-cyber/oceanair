@@ -19,6 +19,10 @@ _TANKER = [(22, 0), (7, 2), (3, 3), (1, 18), (-3, 18), (-2, 3), (-14, 3),
            (-15, 10), (-19, 10), (-18, 2), (-20, 0),
            (-18, -2), (-19, -10), (-15, -10), (-14, -3), (-2, -3),
            (-3, -18), (1, -18), (3, -3), (7, -2)]
+# F/A-18 Super Hornet (dive boat): twin-tail, LERX, broader delta than the F-15.
+_HORNET = [(16, 0), (2, 3), (-4, 11), (-8, 4), (-11, 5), (-9, 12), (-13, 12),
+           (-14, 3), (-16, 0),
+           (-14, -3), (-13, -12), (-9, -12), (-11, -5), (-8, -4), (-4, -11), (2, -3)]
 
 
 class Renderer:
@@ -39,7 +43,9 @@ class Renderer:
         pygame.display.set_caption("Fishing RL")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("consolas", 16)
-        self._harpoons = []  # in-flight harpoon projectiles being animated
+        self._harpoons = []  # in-flight harpoon/AMRAAM projectiles being animated
+        self._mavericks = []  # in-flight Maverick streaks (escort)
+        self._aa12s = []      # in-flight AA-12 streaks (escort)
         # optional video recording (streams frames to a file via imageio)
         self._writer = None
         self._record_path = record_path
@@ -68,6 +74,29 @@ class Renderer:
         pg.draw.rect(self.screen, (60, 60, 60), (x - w // 2, y - 16, w, h))
         bar = (200, 60, 60) if frac < 0.2 else color
         pg.draw.rect(self.screen, bar, (x - w // 2, y - 16, int(w * frac), h))
+
+    def _animate_streaks(self, new_shots, store, speed, color):
+        """Simple missile streak: a short bright segment flying shooter->target, then a
+        small impact ring. Used for Maverick and AA-12 shots (escort)."""
+        pg = self.pygame
+        for ap, bp in new_shots:
+            wd = float(np.hypot(bp[0] - ap[0], bp[1] - ap[1])) + 1e-6
+            store.append({"a": self._px(ap), "b": self._px(bp), "t": 0.0, "inc": speed / wd})
+        alive = []
+        for h in store:
+            h["t"] += h["inc"]
+            ax, ay = h["a"]; bx, by = h["b"]
+            if h["t"] < 1.0:
+                t = h["t"]
+                hx = int(ax + (bx - ax) * t); hy = int(ay + (by - ay) * t)
+                tx = int(ax + (bx - ax) * max(0.0, t - 0.2))
+                ty = int(ay + (by - ay) * max(0.0, t - 0.2))
+                pg.draw.line(self.screen, color, (tx, ty), (hx, hy), 2)
+                alive.append(h)
+            elif h["t"] < 1.3:
+                pg.draw.circle(self.screen, color, (bx, by), 6, 1)
+                alive.append(h)
+        store[:] = alive
 
     def draw(self) -> bool:
         pg = self.pygame
@@ -109,6 +138,12 @@ class Renderer:
         px, py = self._px(s["port"])
         pg.draw.rect(self.screen, (170, 170, 170), (px - 8, py - 8, 16, 16))
 
+        # shellfish reefs (escort): amber marker with a ring (dive-boat targets)
+        for r in s.get("shellfish", []):
+            rx, ry = self._px(r)
+            pg.draw.circle(self.screen, (230, 180, 90), (rx, ry), 5)
+            pg.draw.circle(self.screen, (150, 110, 40), (rx, ry), 9, 1)
+
         # fish
         for f in s["fish"]:
             pg.draw.circle(self.screen, (80, 220, 120), self._px(f), 4)
@@ -141,6 +176,18 @@ class Renderer:
                     col = (120, 235, 215) if k < ammo else (55, 74, 68)
                     pg.draw.circle(self.screen, col, (x0 + k * 6, cy - 23), 2)
 
+        # dive boats = F-18 Super Hornets (escort); teal, red while taking on fuel
+        for pos, fuel, alive, heading, ammo, refueling in s.get("dive_boats", []):
+            col = (235, 70, 70) if refueling else (70, 220, 200)
+            self._draw_craft(pos, heading, _HORNET, col, 1.0)
+            self._fuel_bar(pos, fuel, (70, 220, 200))
+            cx, cy = self._px(pos)
+            cap = min(self.env.cfg.maverick_ammo, 12)   # cap the pip row width
+            x0 = cx - (cap - 1) * 3
+            for k in range(cap):
+                c = (255, 210, 120) if k < ammo else (74, 66, 55)
+                pg.draw.circle(self.screen, c, (x0 + k * 6, cy - 23), 2)
+
         # harpoon shots: animate a projectile flying boat -> fish. The sim removes the
         # fish instantly, so we keep the doomed fish drawn until the harpoon arrives,
         # then flash on impact.
@@ -168,7 +215,17 @@ class Renderer:
                 still_flying.append(h)
         self._harpoons = still_flying
 
-        hud = f"t={s['t']}  catches={s['catches']}  fish={len(s['fish'])}"
+        # Maverick (dive->reef) and AA-12 (fish->dive) streaks (escort)
+        self._animate_streaks(s.get("maverick_shots", []), self._mavericks,
+                              self.env.cfg.maverick_speed, (255, 200, 90))
+        self._animate_streaks(s.get("aa12_shots", []), self._aa12s,
+                              self.env.cfg.aa12_speed, (255, 90, 90))
+
+        if s.get("game_mode") == "escort":
+            hud = (f"t={s['t']}  shellfish={s.get('shellfish_harvested', 0)}  "
+                   f"dive_lost={s.get('dive_boats_lost', 0)}  fish={len(s['fish'])}")
+        else:
+            hud = f"t={s['t']}  catches={s['catches']}  fish={len(s['fish'])}"
         self.screen.blit(self.font.render(hud, True, (230, 230, 230)), (8, 8))
 
         pg.display.flip()
