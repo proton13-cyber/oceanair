@@ -591,4 +591,5 @@ class FishingEnv:
             "aa12_shots": list(self._aa12_shots),
             "shellfish_harvested": self._ep_shellfish,
             "dive_boats_lost": self._dive_lost,
+            "fish_killed": self._ep_fish_killed,
         }

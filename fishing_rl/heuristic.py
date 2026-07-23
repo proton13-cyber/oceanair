@@ -241,11 +241,11 @@ def dive_actions(env, cfg) -> dict:
                         if env.ent[f"barge_{k}"].alive]
         d_tanker = (min(np.linalg.norm(b.pos - e.pos) for b in alive_barges)
                     if alive_barges else np.linalg.norm(port - e.pos))
-        bingo = (d_tanker / max(cfg.dive.max_speed, 1e-6)) * home_burn * 1.5
+        bingo = (d_tanker / max(cfg.dive.max_speed, 1e-6)) * home_burn * cfg.dive_bingo_mult
         if e.refueling:
             if e.fuel >= cfg.refuel_full_frac * cfg.dive.tank:
                 e.refueling = False
-        elif e.fuel < 0.35 * cfg.dive.tank or e.fuel < bingo:
+        elif e.fuel < 0.40 * cfg.dive.tank or e.fuel < bingo:
             e.refueling = True
 
         # priority: rearm at dock > refuel at tanker > dodge a point-blank fish >

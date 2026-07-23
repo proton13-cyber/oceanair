@@ -143,6 +143,7 @@ class Config:
     maverick_pk_near: float = 0.95
     maverick_pk_far: float = 0.70
     fish_threat_speed_frac: float = 0.90  # escort mode: fish pursue dive boats at this fraction of boat speed (A-4)
+    dive_bingo_mult: float = 2.0  # dive boats head to a tanker when fuel drops to (dist/speed * burn * THIS); raise it to bug out earlier with more reserve (fuel starvation is the main loss)
     # escort mode: A-4 threats enter from the RIGHT (east) side and drive in on the dive
     # boats, giving the escorts a defined threat axis to screen.
     fish_spawn_center_x: float = 0.85

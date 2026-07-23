@@ -223,6 +223,7 @@ class Renderer:
 
         if s.get("game_mode") == "escort":
             hud = (f"t={s['t']}  shellfish={s.get('shellfish_harvested', 0)}  "
+                   f"threats_killed={s.get('fish_killed', 0)}  "
                    f"dive_lost={s.get('dive_boats_lost', 0)}  fish={len(s['fish'])}")
         else:
             hud = f"t={s['t']}  catches={s['catches']}  fish={len(s['fish'])}"
