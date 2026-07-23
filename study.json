@@ -7,13 +7,13 @@
   "json": "runs/study_data.json",
   "_6": "=== EXAMPLE SWEEPS (lists = varied; edit or replace) ===",
   "tankers": [
-    4,
-    6,
-    8
+    10,
+    11,
+    12
   ],
   "tank": {
-    "from": 100000,
-    "to": 150000,
+    "from": 150000,
+    "to": 200000,
     "step": 25000
   },
   "_9": "=== FISHING BOATS (jets) ===",
@@ -42,16 +42,18 @@
   "max_fish": 18,
   "school_size": 3,
   "school_spawn_prob": 0.05,
-  "fish_speed_frac": 0.4,
-  "fish_wander": 0.2,
+  "fish_speed_frac": 0.9,
+  "fish_wander": 0.05,
   "school_spread": 25.0,
   "fish_barge_clearance_mult": 4.0,
   "fish_y_min": 0.35,
   "fish_y_max": 0.65,
-  "_41": "=== HARPOON & DOCK ===",
+  "_41": "=== HARPOON = AIM-120D AMRAAM (range/speed) + engagement envelope ===",
   "harpoons": 8,
-  "harpoon_range": 40.0,
+  "harpoon_range": 86.0,
+  "harpoon_speed": 44.0,
   "harpoon_cooldown": 8,
+  "boat_engage_margin": 40.0,
   "dock_service_steps": 45,
   "_46": "=== REFUEL / TRANSFER / RADII ===",
   "transfer_rate": 2000.0,
@@ -72,6 +74,6 @@
   "barge_loiter_radius": 110.0,
   "boat_defend_radius": 120.0,
   "_60": "=== TANKER WAVE CADENCE (echelon; reserves park at dock, launch on refuels) ===",
-  "barge_waves": 3,
+  "barge_waves": 1,
   "barge_wave_trigger": 2
 }

@@ -61,9 +61,11 @@ class Config:
     barge_wave_trigger: int = 1  # EVENT-based release: the next wave launches once this many at-sea refuels have happened (robust to stochastic timing vs a fixed clock). A not-yet-released wave PARKS at the dock, topped up, not burning fuel
     barge_loiter_radius: float = 110.0  # nmi — idle tankers fly a wide loiter loop this wide around the staging point (like the boats), spread by phase
     boat_defend_radius: float = 120.0  # nmi — a fish within this of a live tanker is a THREAT; the nearest boat is dispatched to intercept it before normal fishing
-    harpoon_range: float = 40.0   # nmi — boats harpoon fish from ~AIM-120 mid range (vs the close-net catch_radius)...
+    boat_engage_margin: float = 40.0   # nmi a boat will close BEYOND harpoon_range to get a shot; a target farther than harpoon_range+this is not worth chasing (a fast fleeing mover would just drag the boat out of fuel range) — hold station instead
+    harpoon_range: float = 86.0   # nmi — AIM-120D AMRAAM reach (~160 km); boats kill targets from standoff (vs the close-net catch_radius)...
+    harpoon_speed: float = 44.0   # nmi/min ~Mach 4 AMRAAM (cosmetic: the projectile animation; the catch itself is instant within range)
     harpoon_cooldown: int = 8     # ...must reload this many steps between shots...
-    harpoon_ammo: int = 8         # ...and carry only this many harpoons before returning to the dock to restock
+    harpoon_ammo: int = 8         # ...and carry only this many missiles before returning to the dock to restock
     dock_service_steps: int = 45       # min a boat sits on the deck to rearm + refuel (1 step = 1 min)
     barge_dock_service_steps: int = 25  # min a tanker sits at the dock to fully refuel
     refuel_full_frac: float = 0.90  # a refueling boat floats alongside the barge until this full (dwell, not instant)

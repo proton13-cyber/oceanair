@@ -144,7 +144,7 @@ class Renderer:
         # harpoon shots: animate a projectile flying boat -> fish. The sim removes the
         # fish instantly, so we keep the doomed fish drawn until the harpoon arrives,
         # then flash on impact.
-        hs_speed = 1.3 * self.env.cfg.boat.max_speed   # harpoon flies at 1.3x jet speed
+        hs_speed = self.env.cfg.harpoon_speed          # AMRAAM velocity (~Mach 4)
         for bp, fp in s.get("harpoon_shots", []):
             wd = float(np.hypot(fp[0] - bp[0], fp[1] - bp[1])) + 1e-6
             self._harpoons.append({"a": self._px(bp), "b": self._px(fp),

@@ -63,11 +63,20 @@ def boat_actions(env, cfg) -> dict:
         elif e.harpoons_left <= 0:
             e.reloading = True
         # refuel latch: once low, commit to a full refuel stop (float alongside the
-        # barge) until ~full — no tickle-topping, so refueling has a real dwell cost
+        # barge) until ~full — no tickle-topping, so refueling has a real dwell cost.
+        # Bingo fuel is distance-aware: a boat dragged far out by a fast target turns
+        # back once it only has the fuel to reach the nearest tanker (+50% safety),
+        # not at a fixed fraction it might not make home on.
+        alive_barges = [env.ent[f"barge_{k}"] for k in range(cfg.n_barges)
+                        if env.ent[f"barge_{k}"].alive]
+        d_tanker = (min(np.linalg.norm(b.pos - e.pos) for b in alive_barges)
+                    if alive_barges else np.linalg.norm(port - e.pos))
+        boat_home_burn = cfg.boat.idle_burn + cfg.boat.move_burn * cfg.boat.max_speed
+        bingo = (d_tanker / max(cfg.boat.max_speed, 1e-6)) * boat_home_burn * 1.5
         if e.refueling:
             if e.fuel >= cfg.refuel_full_frac * cfg.boat.tank:
                 e.refueling = False
-        elif e.fuel < BOAT_REFUEL_FRAC * cfg.boat.tank:
+        elif e.fuel < BOAT_REFUEL_FRAC * cfg.boat.tank or e.fuel < bingo:
             e.refueling = True
 
         # target priority: restock at dock > refuel at barge > go fishing
@@ -112,7 +121,10 @@ def boat_actions(env, cfg) -> dict:
                 taken_boat.add(i)
                 taken_fish.add(fj)
 
-        # (b) normal finders-keepers for the boats/fish not spoken for
+        # (b) normal finders-keepers for the boats/fish not spoken for. Only claim
+        # targets inside the engagement envelope (harpoon_range + margin): a fast
+        # fleeing mover beyond it isn't worth a stern chase that drains the tank.
+        envelope = cfg.harpoon_range + cfg.boat_engage_margin
         pairs = []
         for i in fishing:
             if i in taken_boat:
@@ -121,7 +133,9 @@ def boat_actions(env, cfg) -> dict:
             for fj, f in enumerate(env.fish):
                 if fj in taken_fish:
                     continue
-                pairs.append((float(np.linalg.norm(f.pos - ep)), i, fj))
+                d = float(np.linalg.norm(f.pos - ep))
+                if d <= envelope:
+                    pairs.append((d, i, fj))
         pairs.sort(key=lambda x: x[0])
         for _, i, fj in pairs:
             if i in taken_boat or fj in taken_fish:
@@ -134,10 +148,11 @@ def boat_actions(env, cfg) -> dict:
     # ring around the grounds — each boat gets its own phase slot so they SPREAD OUT
     # instead of dogpiling one point and spinning. The ring turns (loiter_spin) so the
     # target never sits still, keeping way on the boats -> wide arcs, no spin-in-place.
-    centroid = (np.mean(np.stack([f.pos for f in env.fish]), axis=0)
-                if env.fish else None)
+    # idle boats loiter on the GROUNDS (the designated fishing box), not on the fish
+    # centroid — chasing the centroid would drag them after fast-fleeing targets. They
+    # hold station and engage whatever comes inside the envelope.
     grounds = np.array([cfg.grounds_center_x * cfg.world_width, 0.5 * cfg.world_height])
-    loiter_center = centroid if centroid is not None else grounds
+    loiter_center = grounds
     nb = max(1, cfg.n_boats)
     for i in fishing:
         e = env.ent[f"boat_{i}"]
