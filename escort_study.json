@@ -11,7 +11,7 @@
   "n_dive_boats": 4,
 
   "_bingo": "recovery tankers that loiter near the dock to catch craft scrambling home on fumes; 0=off. Make n_bingo_tankers a [list] to sweep it; tune bingo_tanker_dist (fraction of width from port).",
-  "n_bingo_tankers": 0,
+  "n_bingo_tankers": 1,
   "bingo_tanker_dist": 0.15,
 
   "world_width": 1500.0,

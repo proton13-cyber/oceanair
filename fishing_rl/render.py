@@ -227,9 +227,10 @@ class Renderer:
                               self.env.cfg.aa12_speed, (255, 90, 90))
 
         if s.get("game_mode") == "escort":
-            hud = (f"t={s['t']}  shellfish={s.get('shellfish_harvested', 0)}  "
-                   f"threats_killed={s.get('fish_killed', 0)}  "
-                   f"dive_lost={s.get('dive_boats_lost', 0)}  fish={len(s['fish'])}")
+            hud = (f"T+{s.get('hours', s['t'] / 60.0):.1f}h    "
+                   f"targets hit: {s.get('shellfish_harvested', 0)}    "
+                   f"threats neutralized: {s.get('fish_killed', 0)}    "
+                   f"refuels: {s.get('sea_refuels', 0)}")
         else:
             hud = f"t={s['t']}  catches={s['catches']}  fish={len(s['fish'])}"
         self.screen.blit(self.font.render(hud, True, (230, 230, 230)), (8, 8))

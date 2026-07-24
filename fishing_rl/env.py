@@ -593,4 +593,6 @@ class FishingEnv:
             "shellfish_harvested": self._ep_shellfish,
             "dive_boats_lost": self._dive_lost,
             "fish_killed": self._ep_fish_killed,
+            "sea_refuels": self._sea_refuels,
+            "hours": self.t * self.cfg.dt / 60.0,
         }
