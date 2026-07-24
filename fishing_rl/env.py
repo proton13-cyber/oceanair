@@ -197,7 +197,7 @@ class FishingEnv:
         ang = self.rng.uniform(-math.pi, math.pi)
         school_vel = np.array([math.cos(ang), math.sin(ang)]) * speed
         for _ in range(cfg.school_size):
-            if len(self.fish) >= cfg.max_fish:
+            if len(self.fish) >= self._max_fish():
                 break
             offs = self.rng.uniform(-cfg.school_spread, cfg.school_spread, size=2)
             self.fish.append(_Fish(pos=center + offs, vel=school_vel.copy()))
@@ -250,6 +250,13 @@ class FishingEnv:
             if b.alive and np.linalg.norm(b.pos - e.pos) <= radius:
                 return True
         return False
+
+    def _max_fish(self):
+        c = self.cfg
+        # escort: optionally scale the A-4 threat cap with strike size (n_dive_boats)
+        if c.game_mode == "escort" and c.escort_threats_per_dive > 0:
+            return max(1, int(round(c.escort_threats_per_dive * c.n_dive_boats)))
+        return c.max_fish
 
     def _pk_hit(self, d, rng, pk_near, pk_far):
         """Probability-of-kill roll: Pk ramps from pk_far at max range to pk_near point-blank."""
@@ -524,7 +531,7 @@ class FishingEnv:
             self._escort_combat()   # 4) ESCORT: Maverick / AMRAAM / AA-12 (hitscan + Pk)
 
         # 6) spawn a fresh school now and then (keeps the grounds stocked)
-        if len(self.fish) < cfg.max_fish and self.rng.random() < cfg.school_spawn_prob:
+        if len(self.fish) < self._max_fish() and self.rng.random() < cfg.school_spawn_prob:
             self._spawn_school()
 
         # 7) termination / truncation
@@ -572,7 +579,7 @@ class FishingEnv:
                         self.cfg.is_bingo(i))                # bingo tanker? (render tag)
                        for i in range(self.cfg.n_barges_total)
                        if self.ent[f"barge_{i}"].alive],   # lost tankers vanish
-            "fish": [f.pos.copy() for f in self.fish],
+            "fish": [(f.pos.copy(), math.atan2(f.vel[1], f.vel[0])) for f in self.fish],
             "harpoon_shots": list(self._harpoon_shots),
             "t": self.t,
             "catches": self._ep_catches,

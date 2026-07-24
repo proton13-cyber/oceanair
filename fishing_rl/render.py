@@ -23,6 +23,9 @@ _TANKER = [(22, 0), (7, 2), (3, 3), (1, 18), (-3, 18), (-2, 3), (-14, 3),
 _HORNET = [(16, 0), (2, 3), (-4, 11), (-8, 4), (-11, 5), (-9, 12), (-13, 12),
            (-14, 3), (-16, 0),
            (-14, -3), (-13, -12), (-9, -12), (-11, -5), (-8, -4), (-4, -11), (2, -3)]
+# A-4 Skyhawk (fish / A-4 threat): small, stubby delta.
+_A4 = [(10, 0), (1, 2), (-3, 7), (-6, 2), (-8, 6), (-10, 0), (-8, -6),
+       (-6, -2), (-3, -7), (1, -2)]
 
 
 class Renderer:
@@ -144,9 +147,11 @@ class Renderer:
             pg.draw.circle(self.screen, (230, 180, 90), (rx, ry), 5)
             pg.draw.circle(self.screen, (150, 110, 40), (rx, ry), 9, 1)
 
-        # fish
-        for f in s["fish"]:
-            pg.draw.circle(self.screen, (80, 220, 120), self._px(f), 4)
+        # fish / A-4 threats: jet silhouette, rotated to heading, ~just under F-15 size.
+        # red in escort mode (threats), green in fishing mode (targets).
+        fcol = (235, 80, 80) if s.get("game_mode") == "escort" else (80, 220, 120)
+        for fp, fh in s["fish"]:
+            self._draw_craft(fp, fh, _A4, fcol, 1.35)
 
         # barges = KC-135 tankers (draw scare ring first); red while offloading fuel.
         # bingo/recovery tankers get a green tint + a "B" marker so they read apart.

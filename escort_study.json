@@ -30,6 +30,7 @@
   "fish_spawn_center_x": 0.85,
   "fish_spawn_half_span": 0.10,
   "fish_threat_speed_frac": 0.9,
+  "escort_threats_per_dive": 1.0,
   "max_fish": 4,
   "school_size": 1
 }

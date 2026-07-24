@@ -71,8 +71,8 @@ class Config:
     harpoon_speed: float = 44.0   # nmi/min ~Mach 4 AMRAAM (cosmetic: the projectile animation; the catch itself is instant within range)
     harpoon_cooldown: int = 8     # ...must reload this many steps between shots...
     harpoon_ammo: int = 8         # ...and carry only this many missiles before returning to the dock to restock
-    amraam_pk_near: float = 0.95  # escort mode: AIM-120 kill probability point-blank... (fishing-mode catch stays deterministic)
-    amraam_pk_far: float = 0.55   # ...falling to this at max harpoon_range
+    amraam_pk_near: float = 0.90  # escort mode: AIM-120 combat Pk point-blank (real AMRAAM ~90% max)... (fishing-mode catch stays deterministic)
+    amraam_pk_far: float = 0.60   # ...falling to ~60% at max range (harpoon_range), per estimated AMRAAM combat Pk
     dock_service_steps: int = 45       # min a boat sits on the deck to rearm + refuel (1 step = 1 min)
     barge_dock_service_steps: int = 25  # min a tanker sits at the dock to fully refuel
     refuel_full_frac: float = 0.90  # a refueling boat floats alongside the barge until this full (dwell, not instant)
@@ -151,6 +151,7 @@ class Config:
     # boats, giving the escorts a defined threat axis to screen.
     fish_spawn_center_x: float = 0.85
     fish_spawn_half_span: float = 0.10
+    escort_threats_per_dive: float = 0.0  # escort mode: if > 0, the A-4 threat cap SCALES with strike size (round(this * n_dive_boats)) instead of the fixed max_fish. Turns "8 escorts absolute" into a true escorts-per-striker ratio
     escort_screen_standoff: float = 0.05  # escort mode: idle F-15s screen this fraction of WIDTH east of the dive boats. Tight (with the intercept-at-range logic) keeps the tankers' customers close, cutting tanker strandings ~40% at no defense cost; widen only if threats start leaking
 
     # ---- curriculum ----
