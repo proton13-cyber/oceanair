@@ -46,6 +46,8 @@ class Config:
     n_boats: int = 4
     n_barges: int = 8
     n_dive_boats: int = 0       # escort mode only: F-18 strikers that harvest shellfish (0 keeps fishing mode inert)
+    n_bingo_tankers: int = 0    # dedicated RECOVERY tankers (extra, beyond n_barges) that hold station near the dock to catch craft scrambling home on fumes. 0 = disabled
+    bingo_tanker_dist: float = 0.15  # how far from the dock (fraction of world WIDTH) the bingo tankers loiter — small = right on the doorstep, larger = catch stragglers earlier
 
     # ---- world ----
     world_width: float = 1000.0       # nmi, east-west (x)
@@ -161,9 +163,17 @@ class Config:
                 self.port_frac[1] * self.world_height)
 
     @property
+    def n_barges_total(self):
+        # regular forward tankers PLUS any dedicated bingo/recovery tankers (extra)
+        return self.n_barges + self.n_bingo_tankers
+
+    def is_bingo(self, i):
+        return i >= self.n_barges   # barge indices >= n_barges are bingo tankers
+
+    @property
     def agent_names(self):
         names = ([f"boat_{i}" for i in range(self.n_boats)] +
-                 [f"barge_{i}" for i in range(self.n_barges)])
+                 [f"barge_{i}" for i in range(self.n_barges_total)])
         if self.game_mode == "escort":   # dive boats only exist in escort mode
             names += [f"dive_{i}" for i in range(self.n_dive_boats)]
         return names

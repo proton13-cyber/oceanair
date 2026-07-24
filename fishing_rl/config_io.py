@@ -110,6 +110,7 @@ ALIASES = {
     "fish": "max_fish", "fish_speed": "fish_speed_frac",
     "dock_time": "dock_service_steps",
     "width": "world_width", "height": "world_height",
+    "dive_boats": "n_dive_boats", "bingo_tankers": "n_bingo_tankers",
 }
 
 

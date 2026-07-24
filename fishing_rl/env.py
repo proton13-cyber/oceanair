@@ -136,7 +136,7 @@ class FishingEnv:
                         fuel=cfg.boat.tank * tank_mult, role="boat")
             e.harpoons_left = cfg.harpoon_ammo
             self.ent[f"boat_{i}"] = e
-        for i in range(cfg.n_barges):
+        for i in range(cfg.n_barges_total):   # forward tankers + bingo/recovery tankers
             jitter = self.rng.uniform(-20, 20, size=2)
             self.ent[f"barge_{i}"] = _Entity(
                 pos=[px + jitter[0], py + jitter[1]], heading=0.0,
@@ -188,7 +188,7 @@ class FishingEnv:
             c = np.array([self.rng.uniform(lo, hi) * Wx,
                           self.rng.uniform(cfg.fish_y_min, cfg.fish_y_max) * Wy])
             if all(np.linalg.norm(self.ent[f"barge_{i}"].pos - c) >= clearance
-                   for i in range(cfg.n_barges)):
+                   for i in range(cfg.n_barges_total)):
                 center = c
                 break
         if center is None:
@@ -245,7 +245,7 @@ class FishingEnv:
                     f.pos[k] = 2 * bound[k] - f.pos[k]; f.vel[k] = -f.vel[k]
 
     def _near_barge(self, e, radius):
-        for i in range(self.cfg.n_barges):
+        for i in range(self.cfg.n_barges_total):
             b = self.ent[f"barge_{i}"]
             if b.alive and np.linalg.norm(b.pos - e.pos) <= radius:
                 return True
@@ -409,7 +409,7 @@ class FishingEnv:
         # 2b) a tanker that runs dry away from port is a lost asset -> remove it
         # (prevents a stranded, empty barge from sitting there dribbling fuel).
         px, py = cfg.port_pos
-        for i in range(cfg.n_barges):
+        for i in range(cfg.n_barges_total):
             b = self.ent[f"barge_{i}"]
             if (b.alive and b.fuel <= 0.0
                     and np.hypot(b.pos[0] - px, b.pos[1] - py) > cfg.port_radius):
@@ -452,7 +452,7 @@ class FishingEnv:
                 bt.dock_timer = 0
         receiving_now = set()
         giving_now = set()
-        for i in range(cfg.n_barges):
+        for i in range(cfg.n_barges_total):   # forward + bingo tankers both refuel clients
             b = self.ent[f"barge_{i}"]
             if not b.alive:
                 continue
@@ -568,8 +568,9 @@ class FishingEnv:
             "barges": [(self.ent[f"barge_{i}"].pos.copy(),
                         self.ent[f"barge_{i}"].fuel / self.cfg.barge.tank,
                         self.ent[f"barge_{i}"].heading,
-                        f"barge_{i}" in self._refuel_barges)
-                       for i in range(self.cfg.n_barges)
+                        f"barge_{i}" in self._refuel_barges,
+                        self.cfg.is_bingo(i))                # bingo tanker? (render tag)
+                       for i in range(self.cfg.n_barges_total)
                        if self.ent[f"barge_{i}"].alive],   # lost tankers vanish
             "fish": [f.pos.copy() for f in self.fish],
             "harpoon_shots": list(self._harpoon_shots),

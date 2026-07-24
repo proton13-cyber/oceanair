@@ -67,7 +67,7 @@ def boat_actions(env, cfg) -> dict:
         # Bingo fuel is distance-aware: a boat dragged far out by a fast target turns
         # back once it only has the fuel to reach the nearest tanker (+50% safety),
         # not at a fixed fraction it might not make home on.
-        alive_barges = [env.ent[f"barge_{k}"] for k in range(cfg.n_barges)
+        alive_barges = [env.ent[f"barge_{k}"] for k in range(cfg.n_barges_total)
                         if env.ent[f"barge_{k}"].alive]
         d_tanker = (min(np.linalg.norm(b.pos - e.pos) for b in alive_barges)
                     if alive_barges else np.linalg.norm(port - e.pos))
@@ -84,9 +84,9 @@ def boat_actions(env, cfg) -> dict:
             actions[f"boat_{i}"] = _steer_towards(
                 e.pos, e.heading, port, cfg.boat.max_turn_rate)
         elif e.refueling:
-            barges = [env.ent[f"barge_{k}"] for k in range(cfg.n_barges)
+            barges = [env.ent[f"barge_{k}"] for k in range(cfg.n_barges_total)
                       if env.ent[f"barge_{k}"].alive]
-            # steer to the nearest live tanker; if the fleet is gone, run for the dock
+            # steer to the nearest live tanker (incl. bingo tankers near the dock)
             target = (min(barges, key=lambda b: np.linalg.norm(b.pos - e.pos)).pos
                       if barges else port)
             actions[f"boat_{i}"] = _steer_towards(
@@ -146,7 +146,7 @@ def boat_actions(env, cfg) -> dict:
         threats = []
         for fj, f in enumerate(env.fish):
             dmin = min((np.linalg.norm(env.ent[f"barge_{k}"].pos - f.pos)
-                        for k in range(cfg.n_barges) if env.ent[f"barge_{k}"].alive),
+                        for k in range(cfg.n_barges_total) if env.ent[f"barge_{k}"].alive),
                        default=float("inf"))
             if dmin <= cfg.boat_defend_radius:
                 threats.append((dmin, fj))
@@ -237,7 +237,7 @@ def dive_actions(env, cfg) -> dict:
         elif e.maverick_ammo <= 0:
             e.reloading = True
         # bingo-fuel latch: distance-aware to the nearest live tanker (else the dock)
-        alive_barges = [env.ent[f"barge_{k}"] for k in range(cfg.n_barges)
+        alive_barges = [env.ent[f"barge_{k}"] for k in range(cfg.n_barges_total)
                         if env.ent[f"barge_{k}"].alive]
         d_tanker = (min(np.linalg.norm(b.pos - e.pos) for b in alive_barges)
                     if alive_barges else np.linalg.norm(port - e.pos))
@@ -350,10 +350,27 @@ class HeuristicPolicy:
                 assigned[bi] = bt
                 used.add(bi)
 
-        for i in range(cfg.n_barges):
+        for i in range(cfg.n_barges_total):
             b = env.ent[f"barge_{i}"]
             if not b.alive:
                 continue   # lost tanker — removed from the sim
+
+            # BINGO/RECOVERY tanker: hold a station near the dock (spread across the
+            # approach) to catch craft scrambling home on fumes; the env auto-transfers
+            # to any low craft that reaches it. Dock-refill when its own fuel dips.
+            if cfg.is_bingo(i):
+                if b.fuel < 0.25 * cfg.barge.tank:
+                    actions[f"barge_{i}"] = _steer_towards(
+                        b.pos, b.heading, port, cfg.barge.max_turn_rate)
+                    continue
+                bi = i - cfg.n_barges
+                nb2 = max(1, cfg.n_bingo_tankers)
+                station = np.array([
+                    (cfg.port_frac[0] + cfg.bingo_tanker_dist) * cfg.world_width,
+                    ((bi + 1) / (nb2 + 1)) * cfg.world_height])
+                actions[f"barge_{i}"] = _steer_towards(
+                    b.pos, b.heading, station, cfg.barge.max_turn_rate)
+                continue
 
             # 0) reserve wave: sit on the tarmac (steer to port, park there topped up)
             # until this wave's deployment time. Conserves fuel for a fresh sortie.

@@ -148,14 +148,19 @@ class Renderer:
         for f in s["fish"]:
             pg.draw.circle(self.screen, (80, 220, 120), self._px(f), 4)
 
-        # barges = KC-135 tankers (draw scare ring first); red while offloading fuel
-        for pos, fuel, heading, refueling in s["barges"]:
+        # barges = KC-135 tankers (draw scare ring first); red while offloading fuel.
+        # bingo/recovery tankers get a green tint + a "B" marker so they read apart.
+        for pos, fuel, heading, refueling, bingo in s["barges"]:
             c = self._px(pos)
             pg.draw.circle(self.screen, (90, 60, 20),
                            c, int(s["scare_radius"] * self.scale), 1)
-            col = (235, 70, 70) if refueling else (240, 160, 40)
+            base = (90, 210, 130) if bingo else (240, 160, 40)
+            col = (235, 70, 70) if refueling else base
             self._draw_craft(pos, heading, _TANKER, col, 1.0)
-            self._fuel_bar(pos, fuel, (240, 160, 40))
+            self._fuel_bar(pos, fuel, base)
+            if bingo:
+                lab = self.font.render("B", True, (150, 240, 180))
+                self.screen.blit(lab, (c[0] - 4, c[1] + 10))
 
         # boats = fighter jets; red while taking on fuel
         for pos, fuel, alive, heading, ammo, refueling in s["boats"]:
