@@ -8,7 +8,7 @@
 
   "game_mode": "escort",
   "n_boats": 8,
-  "n_dive_boats": 4,
+  "n_dive_boats": 6,
 
   "_bingo": "recovery tankers that loiter near the dock to catch craft scrambling home on fumes; 0=off. Make n_bingo_tankers a [list] to sweep it; tune bingo_tanker_dist (fraction of width from port).",
   "n_bingo_tankers": 1,
