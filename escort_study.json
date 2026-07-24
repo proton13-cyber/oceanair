@@ -13,6 +13,8 @@
   "_bingo": "recovery tankers that loiter near the dock to catch craft scrambling home on fumes; 0=off. Make n_bingo_tankers a [list] to sweep it; tune bingo_tanker_dist (fraction of width from port).",
   "n_bingo_tankers": 1,
   "bingo_tanker_dist": 0.15,
+  "barge_reserve_mult": 3.0,
+  "escort_screen_standoff": 0.05,
 
   "world_width": 1500.0,
   "world_height": 1000.0,

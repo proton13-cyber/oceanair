@@ -59,6 +59,7 @@ class Config:
     accel_frac: float = 0.15   # momentum: speed can change by at most this fraction of max_speed per step
     loiter_radius: float = 180.0  # nmi — when idle (no fish), boats patrol a ring this wide instead of piling on one point
     loiter_spin: float = 0.015    # rad/step the patrol ring rotates, so idle boats sweep wide arcs instead of spinning in place
+    barge_reserve_mult: float = 2.0  # tanker JOKER fuel: it turns back to port once fuel drops to (straight-line-home burn x THIS). Higher = more padding = turns back earlier (fewer strandings, less time on station)
     barge_stage_standoff: float = 0.12  # tanker loiter line sits this fraction of width PORT-SIDE of the grounds center (so tankers stay just behind the fish band)
     barge_stage_y: float = 0.50  # tanker loiter-loop center as a fraction of world HEIGHT
     barge_waves: int = 1         # split tankers into this many cadence groups; each wave deploys forward only after the one before it has begun refueling boats, so they cycle OUT OF PHASE. 1 = all deploy together
@@ -150,6 +151,7 @@ class Config:
     # boats, giving the escorts a defined threat axis to screen.
     fish_spawn_center_x: float = 0.85
     fish_spawn_half_span: float = 0.10
+    escort_screen_standoff: float = 0.05  # escort mode: idle F-15s screen this fraction of WIDTH east of the dive boats. Tight (with the intercept-at-range logic) keeps the tankers' customers close, cutting tanker strandings ~40% at no defense cost; widen only if threats start leaking
 
     # ---- curriculum ----
     curriculum: Curriculum = field(default_factory=Curriculum)

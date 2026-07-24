@@ -79,11 +79,12 @@ def boat_actions(env, cfg) -> dict:
         elif e.fuel < BOAT_REFUEL_FRAC * cfg.boat.tank or e.fuel < bingo:
             e.refueling = True
 
-        # target priority: restock at dock > refuel at barge > go fishing
-        if e.reloading:
-            actions[f"boat_{i}"] = _steer_towards(
-                e.pos, e.heading, port, cfg.boat.max_turn_rate)
-        elif e.refueling:
+        # target priority. In ESCORT, FUEL comes first: a boat can refuel while out of
+        # missiles, and running dry is fatal — don't beeline the dock for ammo past a
+        # tanker. In FISHING, the dock rearms AND refuels together (and boats don't die),
+        # so reload-first is more efficient there.
+        fuel_first = cfg.game_mode == "escort"
+        if e.refueling and (fuel_first or not e.reloading):
             barges = [env.ent[f"barge_{k}"] for k in range(cfg.n_barges_total)
                       if env.ent[f"barge_{k}"].alive]
             # steer to the nearest live tanker (incl. bingo tankers near the dock)
@@ -91,6 +92,9 @@ def boat_actions(env, cfg) -> dict:
                       if barges else port)
             actions[f"boat_{i}"] = _steer_towards(
                 e.pos, e.heading, np.asarray(target), cfg.boat.max_turn_rate)
+        elif e.reloading:
+            actions[f"boat_{i}"] = _steer_towards(
+                e.pos, e.heading, port, cfg.boat.max_turn_rate)
         else:
             fishing.append(i)
 
@@ -114,18 +118,26 @@ def boat_actions(env, cfg) -> dict:
                     _, bi = min(cand)
                     assigned[bi] = f.pos
                     used.add(bi)
-        # screen point: east of the dive-boat centroid, toward the fish-spawn side
+        # screen point: a controllable standoff EAST of the dive-boat centroid (not all
+        # the way to the spawn line — that dragged escorts, and their tankers, too far
+        # forward and stranded the fleet).
         if dives:
             cen = np.mean([d.pos for d in dives], axis=0)
-            spawn_x = cfg.fish_spawn_center_x * cfg.world_width
-            screen = np.array([0.5 * (cen[0] + spawn_x), cen[1]])
+            screen = np.array([cen[0] + cfg.escort_screen_standoff * cfg.world_width, cen[1]])
         else:
             screen = np.array([cfg.shellfish_center_x * cfg.world_width,
                                0.5 * cfg.world_height])
         for i in fishing:
             e = env.ent[f"boat_{i}"]
             if i in assigned:
-                target = assigned[i]
+                # intercept: fly to a point a shot short of the fish, not onto it, so the
+                # escort stops at AMRAAM range (the env fires) instead of chasing it east
+                d = np.asarray(assigned[i]) - e.pos
+                dn = np.linalg.norm(d)
+                if dn > cfg.harpoon_range * 0.9:
+                    target = np.asarray(assigned[i]) - d / dn * cfg.harpoon_range * 0.9
+                else:
+                    target = screen   # already in range -> ease back toward station
             else:
                 ang = 2 * math.pi * i / nb + cfg.loiter_spin * env.t
                 target = screen + cfg.loiter_radius * np.array([math.cos(ang), math.sin(ang)])
@@ -250,13 +262,15 @@ def dive_actions(env, cfg) -> dict:
 
         # priority: rearm at dock > refuel at tanker > dodge a point-blank fish >
         #           strike nearest reef > loiter on the reef band
-        if e.reloading:
-            actions[f"dive_{i}"] = _steer_towards(e.pos, e.heading, port, turn)
-            continue
+        # FUEL FIRST: refuel while out of Mavericks rather than running dry en route
+        # to the dock for a rearm.
         if e.refueling:
             tgt = (min(alive_barges, key=lambda b: np.linalg.norm(b.pos - e.pos)).pos
                    if alive_barges else port)
             actions[f"dive_{i}"] = _steer_towards(e.pos, e.heading, np.asarray(tgt), turn)
+            continue
+        if e.reloading:
+            actions[f"dive_{i}"] = _steer_towards(e.pos, e.heading, port, turn)
             continue
         danger = [f for f in env.fish
                   if np.linalg.norm(f.pos - e.pos) < 0.5 * cfg.aa12_range]
@@ -328,7 +342,7 @@ class HeuristicPolicy:
             # line estimate ignores. A barge turns back before it can strand — no
             # matter how big the world or how small its tank.
             dist_home = np.linalg.norm(b.pos - port)
-            reserve = (dist_home / max(cfg.barge.max_speed, 1e-6)) * home_burn * 2.0
+            reserve = (dist_home / max(cfg.barge.max_speed, 1e-6)) * home_burn * cfg.barge_reserve_mult
             going_port[i] = (servicing
                              or b.fuel < thr * cfg.barge.tank
                              or b.fuel < reserve)
